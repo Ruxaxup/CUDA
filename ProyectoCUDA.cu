@@ -27,9 +27,12 @@ static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t
 #define IMG_HEIGHT 256
 #define THREADS 100 //x 10
 #define BLOCKS 66
-
+#define IGUAL 1
+#define DIFF 2
 using namespace std;
 using namespace cv;
+
+bool isDiff(Mat A, Mat B);
 
 /**
  * CUDA kernel that computes reciprocal values for a given vector
@@ -40,10 +43,9 @@ __global__ void comparamela(unsigned char *d_MA,unsigned char *d_MB,unsigned cha
 
 	if(id < IMG_WIDTH*IMG_WIDTH)
 		d_MC[id] = d_MA[id] - d_MB[id];
-	//d_MC[id] = 200;
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	unsigned char matrizA[IMG_WIDTH * IMG_HEIGHT];
 	unsigned char matrizB[IMG_WIDTH * IMG_HEIGHT];
@@ -51,16 +53,37 @@ int main(void)
 
 	unsigned char *d_MA, *d_MB, *d_MC;
 
-	//Cargar imageness
-	char* name1 = "78.jpg";
-	char* name2 = "83.jpg";
+	//Minimo y maximo dos argumentos
+	if(argc > 3){
+		printf("El numero de argumentos debe ser igual a 3\n.");
+		return 3;
+	}
+
+	//Cargar imagenes
+	char *name1 = argv[1];
+	char *name2 = argv[2];
+
 	Mat imageA;
 	Mat imageB;
 	
 	imageA = imread(name1,1);
 	imageB = imread(name2,1);
+
+
 	namedWindow("Display Image", WINDOW_AUTOSIZE );
 	imshow("Display Image", imageA);
+	namedWindow("Display Image2", WINDOW_AUTOSIZE );
+	imshow("Display Image2", imageB);
+
+	/*
+		VErificar dimensiones de las imagenes
+	*/
+	if(isDiff(imageA,imageB))
+	{
+		printf("**Las dimensiones no coinciden.\n");
+		return DIFF;
+	}
+
 	//////////////////////
 	//Copiar imagenes a arreglos
 	Vec3b intensityA,intensityB;
@@ -89,40 +112,40 @@ int main(void)
 
 
 	cudaMemcpy(matrizC,d_MC,sizeof(char)*IMG_HEIGHT*IMG_WIDTH,cudaMemcpyDeviceToHost);
-	int iteraciones = 0;
-	for(int i=0; i<IMG_WIDTH && iteraciones < 40; i++){
+
+	//Verificar si son iguales
+	int diferente = IGUAL;
+	for(int i=0; i<IMG_WIDTH; i++){
 		for(int j=0; j<IMG_WIDTH; j++){
 			if(matrizC[i*IMG_WIDTH+j] != 0){
-				iteraciones++;
-				printf("A %i ",matrizA[i*IMG_WIDTH+j]);
-				printf("B %i ",matrizB[i*IMG_WIDTH+j]);
-			   	printf("C %i -- ",matrizC[i*IMG_WIDTH+j]);
+				diferente = DIFF;
+				break;
 			}					    
 		}
-		printf("\n");
+		if(diferente) break;
 	}
 
 	Mat imagedif;
 	imagedif = imageB;
 	Vec3b intensityC;
 	//Se recrea la imagen a partir del arreglo c
-	    for(int i=0; i<IMG_WIDTH; i++){
-			for(int j=0; j<IMG_WIDTH; j++){
-			    intensityC.val[0] = matrizC[i*IMG_WIDTH+j];
-			    intensityC.val[1] = matrizC[i*IMG_WIDTH+j];
-			    intensityC.val[2] = matrizC[i*IMG_WIDTH+j];
-			    imagedif.at<Vec3b>(i, j)=intensityC;
-			}
-	    }
-	    namedWindow( "diferencia de im", CV_WINDOW_NORMAL );
-	    imshow( "diferencia de im", imagedif);
+    for(int i=0; i<IMG_WIDTH; i++){
+		for(int j=0; j<IMG_WIDTH; j++){
+		    intensityC.val[0] = matrizC[i*IMG_WIDTH+j];
+		    intensityC.val[1] = matrizC[i*IMG_WIDTH+j];
+		    intensityC.val[2] = matrizC[i*IMG_WIDTH+j];
+		    imagedif.at<Vec3b>(i, j)=intensityC;
+		}
+    }
+    namedWindow( "diferencia de im", CV_WINDOW_NORMAL );
+    imshow( "diferencia de im", imagedif);
 	waitKey(0);
 
 	/* Free memory */
 	cudaFree(d_MA);
 	cudaFree(d_MB);
 	cudaFree(d_MC);
-	return 0;
+	return diferente;
 }
 
 /**
@@ -137,3 +160,7 @@ static void CheckCudaErrorAux (const char *file, unsigned line, const char *stat
 	exit (1);
 }
 
+bool isDiff(Mat A, Mat B)
+{
+	return (A.rows != B.rows) && (A.cols != B.cols);
+}
