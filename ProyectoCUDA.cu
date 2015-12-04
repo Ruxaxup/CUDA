@@ -27,8 +27,8 @@ static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t
 #define IMG_HEIGHT 256
 #define THREADS 100 //x 10
 #define BLOCKS 66
-#define IGUAL 1
-#define DIFF 2
+#define IGUAL 0
+#define DIFF 1
 using namespace std;
 using namespace cv;
 
@@ -69,12 +69,12 @@ int main(int argc, char *argv[])
 	imageA = imread(name1,1);
 	imageB = imread(name2,1);
 
-
+/*
 	namedWindow("Display Image", WINDOW_AUTOSIZE );
 	imshow("Display Image", imageA);
 	namedWindow("Display Image2", WINDOW_AUTOSIZE );
 	imshow("Display Image2", imageB);
-
+*/
 	/*
 		VErificar dimensiones de las imagenes
 	*/
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 		}
 		if(diferente) break;
 	}
-
+	/*
 	Mat imagedif;
 	imagedif = imageB;
 	Vec3b intensityC;
@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
     }
     namedWindow( "diferencia de im", CV_WINDOW_NORMAL );
     imshow( "diferencia de im", imagedif);
-	waitKey(0);
+	waitKey(0);*/
 
 	/* Free memory */
 	cudaFree(d_MA);
