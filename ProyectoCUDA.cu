@@ -14,6 +14,7 @@
 #include <numeric>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 
 //Librerias de OpenCV
@@ -30,7 +31,7 @@ static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t
 using namespace std;
 using namespace cv;
 
-bool isDiff(Mat A, Mat B);
+bool isEq(Mat A, Mat B);
 
 
 __global__ void comparamela(unsigned char *d_MA,unsigned char *d_MB,unsigned char *d_MC, unsigned int resolution) {
@@ -58,6 +59,7 @@ int main(int argc, char *argv[])
 	unsigned int blocks_x, blocks_y;
 	unsigned int width, height;
 
+	width = height = 1;
 	threads_x = threads_y 	= 1;
 	blocks_x = blocks_y = 1;
 
@@ -76,11 +78,11 @@ int main(int argc, char *argv[])
 	
 	imageA = imread(name1,1);
 	imageB = imread(name2,1);
-
+	cout << "[" << name1 << "] -> [" << name2 << "]" << endl;
 	/*
 		Verificar dimensiones de las imagenes
 	*/
-	if(isDiff(imageA,imageB))
+	if(!isEq(imageA,imageB))
 	{
 		printf("**Las dimensiones no coinciden.\n");
 		return DIFF;
@@ -90,9 +92,14 @@ int main(int argc, char *argv[])
 	resolution = width * height;
 
 	//Reserva de memoria en el host
-	matrizA = (unsigned char*)malloc(sizeof(unsigned char) * width * height);
-	matrizB = (unsigned char*)malloc(sizeof(unsigned char) * width * height);
-	matrizC = (unsigned char*)malloc(sizeof(unsigned char) * width * height);
+	cout << "***RESERVA DE MEMORIA: "<<resolution<< endl;
+	matrizA = (unsigned char*)malloc(sizeof(unsigned char) * resolution);
+	matrizB = (unsigned char*)malloc(sizeof(unsigned char) * resolution);
+	matrizC = (unsigned char*)malloc(sizeof(unsigned char) * resolution);
+
+	/*matrizA = new unsigned char[resolution];
+	matrizB = new unsigned char[resolution];
+	matrizC = new unsigned char[resolution];*/
 
 	//Copiar imagenes a arreglos
 	Vec3b intensityA,intensityB;
@@ -122,6 +129,12 @@ int main(int argc, char *argv[])
 		threads_x = imageA.rows;
 		threads_y = imageA.cols;
 	}
+	else
+	{
+		threads_x = threads_y = 32;
+		blocks_x = ceil(imageA.cols / threads_x);
+		blocks_y = ceil(imageA.rows / threads_y);
+	}
 
 	dim3 bloque(blocks_x, blocks_y);
 	dim3 hilos(threads_x, threads_y);
@@ -131,6 +144,7 @@ int main(int argc, char *argv[])
 	//Copia resultado al host
 	cudaMemcpy(matrizC,d_MC,sizeof(char)*width*height,cudaMemcpyDeviceToHost);
 
+	//cout << "***COMPARACION DE MEMORIA"<< endl;
 	//Verificar si son iguales
 	int diferente = IGUAL;
 	for(int i=0; i<width; i++){
@@ -142,6 +156,7 @@ int main(int argc, char *argv[])
 		}
 		if(diferente) break;
 	}
+	//cout << "***LIBERACION DE MEMORIA"<< endl;
 
 	/* Free memory */
 	cudaFree(d_MA);
@@ -151,6 +166,10 @@ int main(int argc, char *argv[])
 	free(matrizA);
 	free(matrizB);
 	free(matrizC);
+	/*delete [] matrizA;
+	delete [] matrizB;
+	delete [] matrizC;*/
+	//cout << "***LIBERACION DE MEMORIA COMPLETADA"<< endl;
 	return diferente;
 }
 
@@ -166,7 +185,9 @@ static void CheckCudaErrorAux (const char *file, unsigned line, const char *stat
 	exit (1);
 }
 
-bool isDiff(Mat A, Mat B)
+bool isEq(Mat A, Mat B)
 {
-	return (A.rows != B.rows) && (A.cols != B.cols);
+	cout << "A: " <<A.cols<<","<<A.rows<<endl;
+	cout << "B: " <<B.cols<<","<<B.rows<<endl;
+	return (A.rows == B.rows) && (A.cols == B.cols);
 }
