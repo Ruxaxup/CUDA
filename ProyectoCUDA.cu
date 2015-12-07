@@ -25,7 +25,7 @@ static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t
 
 #define IMG_WIDTH 256
 #define IMG_HEIGHT 256
-#define THREADS 100 //x 10
+#define THREADS 32 //x 32
 #define BLOCKS 66
 #define IGUAL 0
 #define DIFF 1
@@ -34,9 +34,7 @@ using namespace cv;
 
 bool isDiff(Mat A, Mat B);
 
-/**
- * CUDA kernel that computes reciprocal values for a given vector
- */
+
 __global__ void comparamela(unsigned char *d_MA,unsigned char *d_MB,unsigned char *d_MC) {
 	int id = blockIdx.x * blockDim.x * blockDim.y
 				+ threadIdx.y * blockDim.x + threadIdx.x;
@@ -69,12 +67,6 @@ int main(int argc, char *argv[])
 	imageA = imread(name1,1);
 	imageB = imread(name2,1);
 
-/*
-	namedWindow("Display Image", WINDOW_AUTOSIZE );
-	imshow("Display Image", imageA);
-	namedWindow("Display Image2", WINDOW_AUTOSIZE );
-	imshow("Display Image2", imageB);
-*/
 	/*
 		VErificar dimensiones de las imagenes
 	*/
@@ -105,7 +97,7 @@ int main(int argc, char *argv[])
 	cudaMemcpy(d_MB,matrizB,sizeof(char)*IMG_WIDTH*IMG_HEIGHT,cudaMemcpyHostToDevice);
 
 	dim3 bloque(BLOCKS);
-	dim3 hilos(10,THREADS);
+	dim3 hilos(THREADS,THREADS);
 
 	comparamela<<<bloque,hilos>>>(d_MA,d_MB,d_MC);
 
@@ -124,22 +116,6 @@ int main(int argc, char *argv[])
 		}
 		if(diferente) break;
 	}
-	/*
-	Mat imagedif;
-	imagedif = imageB;
-	Vec3b intensityC;
-	//Se recrea la imagen a partir del arreglo c
-    for(int i=0; i<IMG_WIDTH; i++){
-		for(int j=0; j<IMG_WIDTH; j++){
-		    intensityC.val[0] = matrizC[i*IMG_WIDTH+j];
-		    intensityC.val[1] = matrizC[i*IMG_WIDTH+j];
-		    intensityC.val[2] = matrizC[i*IMG_WIDTH+j];
-		    imagedif.at<Vec3b>(i, j)=intensityC;
-		}
-    }
-    namedWindow( "diferencia de im", CV_WINDOW_NORMAL );
-    imshow( "diferencia de im", imagedif);
-	waitKey(0);*/
 
 	/* Free memory */
 	cudaFree(d_MA);
