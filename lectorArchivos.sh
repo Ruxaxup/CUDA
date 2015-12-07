@@ -2,7 +2,6 @@
 
 SRC=$1
 DEST=$2
-
 if [ ! -d "$1" ] && [ ! -d "$2" ]; then
 	echo "Necesitan ser directorios"
 else
@@ -16,8 +15,6 @@ else
 	/:$/&&f{s=$0;f=0}
 	/:$/&&!f{sub(/:$/,"");s=$0;f=1;next}
 	NF&&f{ print s"/"$0 }' | grep -iE 'jpeg|jpg|png|bmp|tiff|tif' > dest.txt
-
-	echo "Obtenido lista de imagenes"
 
 	#Lectura de archivos
 	  while read -r linea
@@ -38,22 +35,18 @@ else
 	        	#Si nom dif & pixels dif -> Se copia
 
 	        	#Comparamos pixeles
-	        	echo "Comp: "$linea" con "$linea2
+	        	#echo "Comp: "$linea" con "$linea2
 	        	./proyecto $linea $linea2
 	        	resultado=$?
-	        	echo "Resultado main: "$resultado
 	        	if [ "$resultado" = 1 ]; then
-	        		echo "=============SON DIFERENTES"
 	        		copiar=true
 	        		##Son diferentes a nivel pixel
 	        		#Nombres iguales?
-		        	if [ ${imagen1} = ${imagen2} ]; then	
-		        		echo "********************NOMBRES IGUALES"        		
+		        	if [ ${imagen1} = ${imagen2} ]; then       		
 		        		nomRep=true
 		        	fi
 		        else
 		        	#Son iguales a nivel pixel
-		        	echo "=============SON IGUALES"
 		        	copiar=false
 		        	nomRep=false
 		        	break
@@ -61,18 +54,18 @@ else
 	        	
 	        done < "dest.txt"
 	        
-	        if $copiar ; then	
-	        echo "===================COPIAMELA"        	
+	        if $copiar ; then      	
 	        	if $nomRep ; then		        
 			        #Cambiar el nombre
 			        dateC=$(date +%d%m%Y)
 					timeC=$(date +%H%M)
 					destino=$DEST"/"$dateC$timeC"."$ext1		
 					cp ${linea} ${destino}
-					echo $linea" copiada a "$DEST"/"$dateC$timeC"."$ext1
+					
+					echo $linea" copiada a "$DEST"/"$dateC$timeC"."$ext1 >> log.txt
 				else
 					cp ${linea} ${DEST}
-					echo $linea" copiada a"$DEST
+					echo $linea" copiada a"$DEST >> log.txt
 		        fi		        
 	        fi
 	    done < "src.txt"

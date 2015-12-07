@@ -23,8 +23,6 @@
 static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t);
 #define CUDA_CHECK_RETURN(value) CheckCudaErrorAux(__FILE__,__LINE__, #value, value)
 
-#define IMG_WIDTH 256
-#define IMG_HEIGHT 256
 #define THREADS 32 //x 32
 #define BLOCKS 66
 #define IGUAL 0
@@ -35,21 +33,33 @@ using namespace cv;
 bool isDiff(Mat A, Mat B);
 
 
-__global__ void comparamela(unsigned char *d_MA,unsigned char *d_MB,unsigned char *d_MC) {
-	int id = blockIdx.x * blockDim.x * blockDim.y
-				+ threadIdx.y * blockDim.x + threadIdx.x;
+__global__ void comparamela(unsigned char *d_MA,unsigned char *d_MB,unsigned char *d_MC, unsigned int resolution) {
+	/*int id = blockIdx.x * blockDim.x * blockDim.y
+				+ threadIdx.y * blockDim.x + threadIdx.x;*/
+	int blockId = blockIdx.x
+		+ blockIdx.y * gridDim.x;
+	int threadId = blockId * (blockDim.x * blockDim.y)
+		+ (threadIdx.y * blockDim.x)
+		+ threadIdx.x;
 
-	if(id < IMG_WIDTH*IMG_WIDTH)
-		d_MC[id] = d_MA[id] - d_MB[id];
+	if(threadId < resolution)
+		d_MC[threadId] = d_MA[threadId] - d_MB[threadId];
 }
 
 int main(int argc, char *argv[])
 {
-	unsigned char matrizA[IMG_WIDTH * IMG_HEIGHT];
-	unsigned char matrizB[IMG_WIDTH * IMG_HEIGHT];
-	unsigned char matrizC[IMG_WIDTH * IMG_HEIGHT];
-
+	unsigned char *matrizA;
+	unsigned char *matrizB;
+	unsigned char *matrizC;
 	unsigned char *d_MA, *d_MB, *d_MC;
+
+	unsigned int resolution;
+	unsigned int threads_x, threads_y;
+	unsigned int blocks_x, blocks_y;
+	unsigned int width, height;
+
+	threads_x = threads_y 	= 1;
+	blocks_x = blocks_y = 1;
 
 	//Minimo y maximo dos argumentos
 	if(argc > 3){
@@ -68,48 +78,64 @@ int main(int argc, char *argv[])
 	imageB = imread(name2,1);
 
 	/*
-		VErificar dimensiones de las imagenes
+		Verificar dimensiones de las imagenes
 	*/
 	if(isDiff(imageA,imageB))
 	{
 		printf("**Las dimensiones no coinciden.\n");
 		return DIFF;
 	}
+	width = imageA.cols;
+	height = imageA.rows;
+	resolution = width * height;
 
-	//////////////////////
+	//Reserva de memoria en el host
+	matrizA = (unsigned char*)malloc(sizeof(unsigned char) * width * height);
+	matrizB = (unsigned char*)malloc(sizeof(unsigned char) * width * height);
+	matrizC = (unsigned char*)malloc(sizeof(unsigned char) * width * height);
+
 	//Copiar imagenes a arreglos
 	Vec3b intensityA,intensityB;
-	for(int i=0; i<IMG_WIDTH; i++){
-		for(int j=0; j<IMG_WIDTH; j++){
+	for(int i=0; i<width; i++){
+		for(int j=0; j<height; j++){
 		    intensityA = imageA.at<Vec3b>(i, j);
 		    intensityB = imageB.at<Vec3b>(i, j);
-		    matrizA[i*IMG_WIDTH+j]=(unsigned char)intensityA.val[2];
-		    matrizB[i*IMG_WIDTH+j]=(unsigned char)intensityB.val[2];
-		    matrizC[i*IMG_WIDTH+j] = 0;
+		    matrizA[i*width+j]=(unsigned char)intensityA.val[2];
+		    matrizB[i*width+j]=(unsigned char)intensityB.val[2];
+		    matrizC[i*width+j] = 0;
 		}
 	}
 	
-	cudaMalloc((void**)&d_MA,sizeof(char)*IMG_HEIGHT*IMG_WIDTH);
-	cudaMalloc((void**)&d_MB,sizeof(char)*IMG_HEIGHT*IMG_WIDTH);
-	cudaMalloc((void**)&d_MC,sizeof(char)*IMG_HEIGHT*IMG_WIDTH);
+	//Reserva de memoria en el device
+	cudaMalloc((void**)&d_MA,sizeof(char)*resolution);
+	cudaMalloc((void**)&d_MB,sizeof(char)*resolution);
+	cudaMalloc((void**)&d_MC,sizeof(char)*resolution);
 
-	cudaMemcpy(d_MA,matrizA,sizeof(char)*IMG_WIDTH*IMG_HEIGHT,cudaMemcpyHostToDevice);
-	cudaMemcpy(d_MB,matrizB,sizeof(char)*IMG_WIDTH*IMG_HEIGHT,cudaMemcpyHostToDevice);
-
-	dim3 bloque(BLOCKS);
-	dim3 hilos(THREADS,THREADS);
-
-	comparamela<<<bloque,hilos>>>(d_MA,d_MB,d_MC);
+	//Copia imagenes a device
+	cudaMemcpy(d_MA,matrizA,sizeof(char)*width*height,cudaMemcpyHostToDevice);
+	cudaMemcpy(d_MB,matrizB,sizeof(char)*width*height,cudaMemcpyHostToDevice);
 
 
+	//Asignacion de bloques
+	if(imageA.rows < 32 && imageA.cols < 32)
+	{
+		threads_x = imageA.rows;
+		threads_y = imageA.cols;
+	}
 
-	cudaMemcpy(matrizC,d_MC,sizeof(char)*IMG_HEIGHT*IMG_WIDTH,cudaMemcpyDeviceToHost);
+	dim3 bloque(blocks_x, blocks_y);
+	dim3 hilos(threads_x, threads_y);
+
+	//Lanzamiento del kernel
+	comparamela<<<bloque,hilos>>>(d_MA,d_MB,d_MC, resolution);
+	//Copia resultado al host
+	cudaMemcpy(matrizC,d_MC,sizeof(char)*width*height,cudaMemcpyDeviceToHost);
 
 	//Verificar si son iguales
 	int diferente = IGUAL;
-	for(int i=0; i<IMG_WIDTH; i++){
-		for(int j=0; j<IMG_WIDTH; j++){
-			if(matrizC[i*IMG_WIDTH+j] != 0){
+	for(int i=0; i<width; i++){
+		for(int j=0; j<height; j++){
+			if(matrizC[i*width+j] != 0){
 				diferente = DIFF;
 				break;
 			}					    
@@ -121,6 +147,10 @@ int main(int argc, char *argv[])
 	cudaFree(d_MA);
 	cudaFree(d_MB);
 	cudaFree(d_MC);
+
+	free(matrizA);
+	free(matrizB);
+	free(matrizC);
 	return diferente;
 }
 
