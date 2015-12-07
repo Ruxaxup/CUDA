@@ -5,6 +5,7 @@ DEST=$2
 if [ ! -d "$1" ] && [ ! -d "$2" ]; then
 	echo "Necesitan ser directorios"
 else
+	rm elapsedTime.txt
 	#Creacion de archivos
 	ls -R "${SRC}" | awk '
 	/:$/&&f{s=$0;f=0}
@@ -62,7 +63,7 @@ else
 					destino=$DEST"/"$dateC$timeC"."$ext1		
 					cp ${linea} ${destino}
 					
-					echo $linea" copiada a "$DEST"/"$dateC$timeC"."$ext1 >> log.txt
+					echo $linea" copiada a "$destino >> log.txt
 				else
 					cp ${linea} ${DEST}
 					echo $linea" copiada a"$DEST >> log.txt
@@ -70,3 +71,6 @@ else
 	        fi
 	    done < "src.txt"
 fi
+
+tiempoTotal=$(awk '{ sum += $1 } END { print sum }' elapsedTime.txt)
+echo "Tiempo transcurrido en milisegundos: "$tiempoTotal
