@@ -5,7 +5,11 @@ DEST=$2
 if [ ! -d "$1" ] && [ ! -d "$2" ]; then
 	echo "Necesitan ser directorios"
 else
-	rm elapsedTime.txt
+	file="elapsedTime.txt" 
+	if [ -f "$file" ]; then 
+		rm ${file}
+		touch ${file}
+	fi
 	#Creacion de archivos
 	ls -R "${SRC}" | awk '
 	/:$/&&f{s=$0;f=0}
@@ -69,6 +73,10 @@ else
 					echo $linea" copiada a"$DEST >> log.txt
 		        fi		        
 	        fi
+	        ls -R "${DEST}" | awk '
+			/:$/&&f{s=$0;f=0}
+			/:$/&&!f{sub(/:$/,"");s=$0;f=1;next}
+			NF&&f{ print s"/"$0 }' | grep -iE 'jpeg|jpg|png|bmp|tiff|tif' > dest.txt
 	    done < "src.txt"
 fi
 

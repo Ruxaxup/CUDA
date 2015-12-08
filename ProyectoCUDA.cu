@@ -115,8 +115,8 @@ int main(int argc, char *argv[])
 		for(int j=0; j<height; j++){
 		    intensityA = imageA.at<Vec3b>(i, j);
 		    intensityB = imageB.at<Vec3b>(i, j);
-		    matrizA[i*width+j]=(unsigned char)intensityA.val[2];
-		    matrizB[i*width+j]=(unsigned char)intensityB.val[2];
+		    matrizA[i*width+j]=(unsigned char)intensityA.val[0];
+		    matrizB[i*width+j]=(unsigned char)intensityB.val[0];
 		    matrizC[i*width+j] = 0;
 		}
 	}
@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 				break;
 			}					    
 		}
-		if(diferente) break;
+		if(diferente == DIFF) break;
 	}
 	//cout << "***LIBERACION DE MEMORIA"<< endl;
 
