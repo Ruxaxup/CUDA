@@ -11,6 +11,7 @@
  */
 
 #include <iostream>
+#include <fstream>
 #include <numeric>
 #include <stdlib.h>
 #include <stdio.h>
@@ -24,6 +25,7 @@
 static void CheckCudaErrorAux (const char *, unsigned, const char *, cudaError_t);
 #define CUDA_CHECK_RETURN(value) CheckCudaErrorAux(__FILE__,__LINE__, #value, value)
 
+#define TIME_FILE "elapsedTime.txt"
 #define THREADS 32 //x 32
 #define BLOCKS 66
 #define IGUAL 0
@@ -32,7 +34,7 @@ using namespace std;
 using namespace cv;
 
 bool isEq(Mat A, Mat B);
-
+void writeTime(float elapsedTime);
 
 __global__ void comparamela(unsigned char *d_MA,unsigned char *d_MB,unsigned char *d_MC, unsigned int resolution) {
 	/*int id = blockIdx.x * blockDim.x * blockDim.y
@@ -49,19 +51,25 @@ __global__ void comparamela(unsigned char *d_MA,unsigned char *d_MB,unsigned cha
 
 int main(int argc, char *argv[])
 {
-	unsigned char *matrizA;
-	unsigned char *matrizB;
-	unsigned char *matrizC;
+	unsigned char *matrizA = NULL;
+	unsigned char *matrizB = NULL;
+	unsigned char *matrizC = NULL;
 	unsigned char *d_MA, *d_MB, *d_MC;
 
-	unsigned int resolution;
+	int resolution;
 	unsigned int threads_x, threads_y;
 	unsigned int blocks_x, blocks_y;
-	unsigned int width, height;
+	int width, height;
 
 	width = height = 1;
 	threads_x = threads_y 	= 1;
 	blocks_x = blocks_y = 1;
+
+	//Variables control de tiempo
+	cudaEvent_t start, stop;
+	float elapsedTime;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
 
 	//Minimo y maximo dos argumentos
 	if(argc > 3){
@@ -78,13 +86,13 @@ int main(int argc, char *argv[])
 	
 	imageA = imread(name1,1);
 	imageB = imread(name2,1);
-	cout << "[" << name1 << "] -> [" << name2 << "]" << endl;
+	//cout << "[" << name1 << "] -> [" << name2 << "]" << endl;
 	/*
 		Verificar dimensiones de las imagenes
 	*/
 	if(!isEq(imageA,imageB))
 	{
-		printf("**Las dimensiones no coinciden.\n");
+		//printf("**Las dimensiones no coinciden.\n");
 		return DIFF;
 	}
 	width = imageA.cols;
@@ -92,7 +100,7 @@ int main(int argc, char *argv[])
 	resolution = width * height;
 
 	//Reserva de memoria en el host
-	cout << "***RESERVA DE MEMORIA: "<<resolution<< endl;
+	//cout << "***RESERVA DE MEMORIA: "<<resolution<< endl;
 	matrizA = (unsigned char*)malloc(sizeof(unsigned char) * resolution);
 	matrizB = (unsigned char*)malloc(sizeof(unsigned char) * resolution);
 	matrizC = (unsigned char*)malloc(sizeof(unsigned char) * resolution);
@@ -114,13 +122,13 @@ int main(int argc, char *argv[])
 	}
 	
 	//Reserva de memoria en el device
-	cudaMalloc((void**)&d_MA,sizeof(char)*resolution);
-	cudaMalloc((void**)&d_MB,sizeof(char)*resolution);
-	cudaMalloc((void**)&d_MC,sizeof(char)*resolution);
+	cudaMalloc((void**)&d_MA,sizeof(unsigned char)*resolution);
+	cudaMalloc((void**)&d_MB,sizeof(unsigned char)*resolution);
+	cudaMalloc((void**)&d_MC,sizeof(unsigned char)*resolution);
 
 	//Copia imagenes a device
-	cudaMemcpy(d_MA,matrizA,sizeof(char)*width*height,cudaMemcpyHostToDevice);
-	cudaMemcpy(d_MB,matrizB,sizeof(char)*width*height,cudaMemcpyHostToDevice);
+	cudaMemcpy(d_MA,matrizA,sizeof(unsigned char)*width*height,cudaMemcpyHostToDevice);
+	cudaMemcpy(d_MB,matrizB,sizeof(unsigned char)*width*height,cudaMemcpyHostToDevice);
 
 
 	//Asignacion de bloques
@@ -139,10 +147,13 @@ int main(int argc, char *argv[])
 	dim3 bloque(blocks_x, blocks_y);
 	dim3 hilos(threads_x, threads_y);
 
+	//Tomamos tiempo inicial
+	cudaEventRecord(start, 0);
+
 	//Lanzamiento del kernel
 	comparamela<<<bloque,hilos>>>(d_MA,d_MB,d_MC, resolution);
 	//Copia resultado al host
-	cudaMemcpy(matrizC,d_MC,sizeof(char)*width*height,cudaMemcpyDeviceToHost);
+	cudaMemcpy(matrizC,d_MC,sizeof(unsigned char)*width*height,cudaMemcpyDeviceToHost);
 
 	//cout << "***COMPARACION DE MEMORIA"<< endl;
 	//Verificar si son iguales
@@ -158,6 +169,15 @@ int main(int argc, char *argv[])
 	}
 	//cout << "***LIBERACION DE MEMORIA"<< endl;
 
+	//Detenemos el tiempo
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	//Calculamos tiempo
+	cudaEventElapsedTime(&elapsedTime,start,stop);
+	writeTime(elapsedTime);
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+
 	/* Free memory */
 	cudaFree(d_MA);
 	cudaFree(d_MB);
@@ -166,9 +186,6 @@ int main(int argc, char *argv[])
 	free(matrizA);
 	free(matrizB);
 	free(matrizC);
-	/*delete [] matrizA;
-	delete [] matrizB;
-	delete [] matrizC;*/
 	//cout << "***LIBERACION DE MEMORIA COMPLETADA"<< endl;
 	return diferente;
 }
@@ -187,7 +204,14 @@ static void CheckCudaErrorAux (const char *file, unsigned line, const char *stat
 
 bool isEq(Mat A, Mat B)
 {
-	cout << "A: " <<A.cols<<","<<A.rows<<endl;
-	cout << "B: " <<B.cols<<","<<B.rows<<endl;
+	//cout << "A: " <<A.cols<<","<<A.rows<<endl;
+	//cout << "B: " <<B.cols<<","<<B.rows<<endl;
 	return (A.rows == B.rows) && (A.cols == B.cols);
+}
+
+void writeTime(float elapsedTime)
+{
+	ofstream fs(TIME_FILE, ofstream::out | ofstream::app);
+	fs << elapsedTime << endl;
+	fs.close();
 }
